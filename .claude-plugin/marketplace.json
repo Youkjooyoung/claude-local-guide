@@ -1,0 +1,14 @@
+{
+  "name": "youkjooyoung-skills",
+  "description": "Youkjooyoung의 Claude Code 스킬 모음",
+  "owner": {
+    "name": "Youkjooyoung"
+  },
+  "plugins": [
+    {
+      "name": "local-guide",
+      "source": "./plugins/local-guide",
+      "description": "프로젝트 폴더별 지역 지침서(CLAUDE.md)를 전역 지침과 겹치지 않게 만들고 정리한다"
+    }
+  ]
+}
