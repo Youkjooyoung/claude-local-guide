@@ -1,0 +1,27 @@
+{
+  "name": "weather-plugin",
+  "description": "「오늘 날씨 브리핑」이라고 하면 Open-Meteo OpenAPI(직접 만든 MCP 서버)로 오늘 날씨를 받아 옷차림 한 줄과 함께 터미널에 보여 주고, 카카오톡 나챗방으로도 보냅니다.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Youkjooyoung",
+    "url": "https://github.com/Youkjooyoung"
+  },
+  "repository": "https://github.com/Youkjooyoung/claude-local-guide",
+  "license": "MIT",
+  "keywords": ["weather", "open-meteo", "openapi", "mcp", "kakao", "playmcp"],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*__KakaotalkChat-MemoChat",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/check-weather-message.js\"",
+            "timeout": 5,
+            "statusMessage": "날씨 브리핑 메시지 검사 중..."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -68,6 +68,13 @@ plugins/local-guide/
 plugins/project-roadmap/
 ├── .claude-plugin/plugin.json         플러그인 정보
 └── agents/project-roadmap.md          에이전트 본문
+plugins/weather-plugin/
+├── .claude-plugin/plugin.json         플러그인 정보 + 카톡 전송 검사 Hook
+├── .mcp.json                          날씨 MCP 서버 등록
+├── mcp/weather-server.js              Open-Meteo OpenAPI MCP 서버
+├── skills/weather-brief/SKILL.md      날씨 브리핑 스킬
+├── agents/outfit-advisor.md           옷차림 조언 에이전트
+└── hooks/check-weather-message.js     나챗방 전송 전 검사
 ```
 
 ## 함께 제공: project-roadmap 에이전트
@@ -82,6 +89,14 @@ plugins/project-roadmap/
 사용 예시:
 - "인파 밀집 주제로 프로젝트 로드맵 만들어줘. 4명, YOLO + Streamlit"
 - "교통 주제로 기획부터 발표까지 정리해줘. 발표일 11월 27일"
+
+## 함께 제공: weather-plugin (날씨 브리핑)
+「오늘 날씨 브리핑」이라고 하면 Open-Meteo OpenAPI로 오늘 날씨를 받아 옷차림 한 줄과 함께
+터미널에 보여 주고 카카오톡 나챗방으로 보냅니다. 자세한 내용: [plugins/weather-plugin](plugins/weather-plugin/README.md)
+```
+/plugin marketplace add Youkjooyoung/claude-local-guide
+/plugin install weather-plugin@youkjooyoung-skills
+```
 
 ## 라이선스
 MIT
