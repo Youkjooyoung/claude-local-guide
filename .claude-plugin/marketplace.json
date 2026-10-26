@@ -18,7 +18,7 @@
     {
       "name": "weather-plugin",
       "source": "./plugins/weather-plugin",
-      "description": "Open-Meteo OpenAPI(직접 만든 MCP 서버)로 오늘 날씨를 받아 옷차림 한 줄과 함께 요약하고 카카오톡 나챗방으로 보낸다"
+      "description": "오늘·내일 날씨를 옷차림 조언과 함께 요약해 터미널과 카카오톡 나챗방으로 보내는 날씨 브리핑 플러그인"
     }
   ]
 }

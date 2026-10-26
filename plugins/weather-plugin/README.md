@@ -1,5 +1,5 @@
 # weather-plugin
-오늘 날씨 브리핑 → 터미널 · 카카오톡 나챗방 Claude Code 플러그인
+오늘·내일 날씨 브리핑 → 터미널 · 카카오톡 나챗방 Claude Code 플러그인
 
 ---
 
@@ -10,12 +10,12 @@ https://github.com/Youkjooyoung/claude-local-guide/tree/main/plugins/weather-plu
 `weather-plugin` (장터: `youkjooyoung-skills`)
 
 ### 플러그인 설명
-「오늘 날씨 브리핑」이라고 말하면 **Open-Meteo OpenAPI**로 오늘 날씨를 받아 옷차림 한 줄과 함께 터미널에 보여 주고, **카카오톡 나챗방**으로도 보냅니다.
+오늘·내일 날씨를 옷차림 조언과 함께 요약해 터미널과 **카카오톡 나챗방**으로 보내는 날씨 브리핑 플러그인입니다. 날씨는 **Open-Meteo OpenAPI**에서 받습니다.
 
 | 구성 | 파일 | 하는 일 |
 |---|---|---|
-| OpenAPI | Open-Meteo Geocoding · Forecast | 도시 → 좌표 → 현재·오늘 날씨 (API 키 없음) |
-| MCP | `.mcp.json`, `mcp/weather-server.js` | 직접 만든 MCP 서버. 도구 `get_weather(city)`. 외부 패키지 없이 Node 내장 `fetch`만 사용 |
+| OpenAPI | Open-Meteo Geocoding · Forecast | 도시(또는 좌표) → 현재·오늘·내일 날씨 (API 키 없음) |
+| MCP | `.mcp.json`, `mcp/weather-server.js` | 직접 만든 MCP 서버. 도구 `get_weather(city 또는 좌표, day)`. 외부 패키지 없이 Node 내장 `fetch`만 사용 |
 | MCP | PlayMCP `KakaotalkChat-MemoChat` | 결과를 카카오톡 나챗방으로 전송 |
 | Skill | `skills/weather-brief/SKILL.md` | 날씨 조회 → 옷차림 → 터미널 출력 → 나챗방 전송 순서 |
 | Agent | `agents/outfit-advisor.md` | 날씨 수치만 보고 옷차림·우산 조언 한 줄 |
@@ -40,17 +40,19 @@ claude plugin install weather-plugin@youkjooyoung-skills
 
 ### 플러그인 사용 예시
 ```
-사용자: 오늘 부천 날씨 브리핑해줘
+사용자: 남구로 내일 날씨 브리핑해줘
 
-[날씨 브리핑] 부천시 2026-10-26 14:00 기준
-- 지금: 대체로 맑음 18.9°C (체감 18.5°C)
-- 오늘: 최고 19°C / 최저 13°C, 강수 57%
-- 옷차림: 얇은 가디건 + 접이식 우산 챙기세요
+[날씨 브리핑] 구로구 남구로역 10/27(화) 예보 · 10/26 14:15 기준
+- 내일: 대체로 맑음, 최고 16°C / 최저 5°C, 강수 0%
+- 옷차림: 일교차가 커요, 트렌치코트에 두꺼운 니트 겹쳐 입으세요
 출처: Open-Meteo
 
-카카오톡 나챗방으로 보냈습니다.
+카카오톡 나챗방으로 위 브리핑을 보냈습니다. 우산은 챙기지 않아도 됩니다.
 ```
-다른 말로도 됩니다: "서울 날씨 어때?", "제주 날씨 알려주고 카톡으로 보내줘", "오늘 우산 챙겨야 해?"
+다른 말로도 됩니다: "오늘 부천 날씨 브리핑해줘", "서울 날씨 어때?", "제주 내일 날씨 알려주고 카톡으로 보내줘", "오늘 우산 챙겨야 해?"
+
+- 시·군(부천, 서울, 제주)은 도시 이름으로, 구·동·역(남구로, 강남, 해운대)은 좌표로 찾습니다.
+- 오늘과 내일만 지원합니다.
 
 훅이 막는 경우(예: 200자 초과):
 ```

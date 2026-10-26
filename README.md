@@ -91,8 +91,8 @@ plugins/weather-plugin/
 - "교통 주제로 기획부터 발표까지 정리해줘. 발표일 11월 27일"
 
 ## 함께 제공: weather-plugin (날씨 브리핑)
-「오늘 날씨 브리핑」이라고 하면 Open-Meteo OpenAPI로 오늘 날씨를 받아 옷차림 한 줄과 함께
-터미널에 보여 주고 카카오톡 나챗방으로 보냅니다. 자세한 내용: [plugins/weather-plugin](plugins/weather-plugin/README.md)
+오늘·내일 날씨를 옷차림 조언과 함께 요약해 터미널과 카카오톡 나챗방으로 보냅니다(Open-Meteo OpenAPI).
+예: "남구로 내일 날씨 브리핑해줘" 자세한 내용: [plugins/weather-plugin](plugins/weather-plugin/README.md)
 ```
 /plugin marketplace add Youkjooyoung/claude-local-guide
 /plugin install weather-plugin@youkjooyoung-skills
