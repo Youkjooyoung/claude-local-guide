@@ -6,7 +6,7 @@
  * 그래서 플러그인을 설치한 사람이 npm install 을 할 필요가 없다.
  *
  * 도구
- *   get_weather(city) — 오늘 날씨(현재 · 최고/최저 · 강수확률)를 돌려준다.
+ *   get_weather(city | latitude+longitude, day) — 오늘/내일 날씨(최고/최저 · 강수확률, 오늘은 현재 날씨 포함)
  */
 
 const readline = require('readline');
@@ -33,13 +33,20 @@ const TOOLS = [
   {
     name: 'get_weather',
     description:
-      "Today's weather for a city via Open-Meteo. Pass the city name in English romanization " +
-      '(e.g. "Seoul", "Bucheon", "Busan", "Jeju City"). Korean script is rejected because the ' +
-      'geocoder matches it poorly. Defaults to Bucheon.',
+      "Today's or tomorrow's weather via Open-Meteo. For a city (시·군), pass `city` in English " +
+      'romanization (e.g. "Seoul", "Bucheon", "Jeju City"); Korean script is rejected. The geocoder ' +
+      'does NOT know districts, neighborhoods or stations (구·동·역) — pass latitude/longitude and ' +
+      'place_name instead. Always check the returned `region` matches the place the user meant. ' +
+      'Defaults to Bucheon, today.',
     inputSchema: {
       type: 'object',
       properties: {
         city: { type: 'string', description: 'City name in English, e.g. "Bucheon"' },
+        country_code: { type: 'string', description: 'ISO country code for city search. Default "KR"; pass e.g. "JP" for Tokyo' },
+        latitude: { type: 'number', description: 'Use with longitude for districts, neighborhoods or stations (구·동·역) the geocoder cannot find' },
+        longitude: { type: 'number' },
+        place_name: { type: 'string', description: 'Korean label when using coordinates, e.g. "구로구 남구로역"' },
+        day: { type: 'string', enum: ['today', 'tomorrow'], description: 'Default "today"' },
       },
     },
   },
@@ -51,51 +58,79 @@ async function getJson(url) {
   return res.json();
 }
 
-async function getWeather(city) {
+async function findPlace(city, countryCode) {
   city = (city || DEFAULT_CITY).trim();
   if (/[ㄱ-힝]/.test(city)) {
     throw new Error(`도시명 "${city}" 은(는) 한글입니다. 영문 이름(예: Bucheon)으로 다시 호출하세요.`);
   }
-
-  const geo = await getJson(`${GEO_URL}?count=10&language=ko&format=json&name=${encodeURIComponent(city)}`);
+  const cc = (countryCode || 'KR').toUpperCase();
+  const geo = await getJson(
+    `${GEO_URL}?count=10&language=ko&format=json&countryCode=${cc}&name=${encodeURIComponent(city)}`);
   if (!geo.results || geo.results.length === 0) {
-    throw new Error(`"${city}" 을(를) 찾지 못했습니다. 철자를 확인하세요.`);
+    throw new Error(`"${city}" 을(를) ${cc} 에서 찾지 못했습니다. 구·동·역이면 latitude/longitude 로 다시 호출하세요.`);
   }
-  // 동명 소도시보다 큰 도시를 고른다 (예: Jeju → 에티오피아가 아니라 제주시)
+  // 동명 마을보다 큰 도시를 고른다 (예: Jeju → 제주시)
   const place = geo.results.reduce((a, b) => ((b.population || 0) > (a.population || 0) ? b : a));
+  return {
+    name: place.name,
+    region: [place.admin1, place.admin2, place.country].filter(Boolean).join(', '),
+    latitude: place.latitude,
+    longitude: place.longitude,
+  };
+}
+
+async function getWeather(args = {}) {
+  const day = args.day === 'tomorrow' ? 'tomorrow' : 'today';
+  const i = day === 'tomorrow' ? 1 : 0;
+
+  // 지오코더가 모르는 구·동·역은 좌표로 받는다
+  const place = (typeof args.latitude === 'number' && typeof args.longitude === 'number')
+    ? {
+      name: args.place_name || `${args.latitude}, ${args.longitude}`,
+      region: `좌표 직접 지정 (${args.latitude}, ${args.longitude})`,
+      latitude: args.latitude,
+      longitude: args.longitude,
+    }
+    : await findPlace(args.city, args.country_code);
 
   const q = new URLSearchParams({
     latitude: place.latitude,
     longitude: place.longitude,
     timezone: 'auto',
-    forecast_days: '1',
+    forecast_days: '2', // [0]=오늘, [1]=내일
     current: 'temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code',
-    daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code',
+    daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,weather_code',
   });
   const w = await getJson(`${FORECAST_URL}?${q}`);
   const c = w.current;
   const d = w.daily;
 
-  return {
-    city: place.name,
-    region: [place.admin1, place.country].filter(Boolean).join(', '),
+  const result = {
+    place: place.name,
+    region: place.region,
+    day,
+    date: d.time[i],
     observed_at: c.time.replace('T', ' '),
     timezone: w.timezone,
-    now: {
+    forecast: {
+      condition: WMO[d.weather_code[i]] ?? `코드 ${d.weather_code[i]}`,
+      max_c: d.temperature_2m_max[i],
+      min_c: d.temperature_2m_min[i],
+      rain_chance_pct: d.precipitation_probability_max[i],
+      max_wind_kmh: d.wind_speed_10m_max[i],
+    },
+    source: 'Open-Meteo (open-meteo.com)',
+  };
+  if (day === 'today') {
+    result.now = {
       condition: WMO[c.weather_code] ?? `코드 ${c.weather_code}`,
       temp_c: c.temperature_2m,
       feels_like_c: c.apparent_temperature,
       humidity_pct: c.relative_humidity_2m,
       wind_kmh: c.wind_speed_10m,
-    },
-    today: {
-      condition: WMO[d.weather_code[0]] ?? `코드 ${d.weather_code[0]}`,
-      max_c: d.temperature_2m_max[0],
-      min_c: d.temperature_2m_min[0],
-      rain_chance_pct: d.precipitation_probability_max[0],
-    },
-    source: 'Open-Meteo (open-meteo.com)',
-  };
+    };
+  }
+  return result;
 }
 
 function send(msg) {
@@ -113,7 +148,7 @@ async function handle(req) {
         result: {
           protocolVersion: params?.protocolVersion || '2025-06-18',
           capabilities: { tools: {} },
-          serverInfo: { name: 'weather', version: '0.1.0' },
+          serverInfo: { name: 'weather', version: '0.2.0' },
         },
       });
     case 'ping':
@@ -125,7 +160,7 @@ async function handle(req) {
         return send({ jsonrpc: '2.0', id, error: { code: -32602, message: `알 수 없는 도구: ${params?.name}` } });
       }
       try {
-        const data = await getWeather(params.arguments?.city);
+        const data = await getWeather(params.arguments);
         return send({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] } });
       } catch (e) {
         // 도구 실패는 isError 로 돌려줘야 모델이 메시지를 읽고 다시 시도한다
