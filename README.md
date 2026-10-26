@@ -65,7 +65,23 @@ plugins/local-guide/
     └── references/
         ├── template.md                지침서 뼈대와 예시
         └── checklist.md               폴더 유형별 확인 항목
+plugins/project-roadmap/
+├── .claude-plugin/plugin.json         플러그인 정보
+└── agents/project-roadmap.md          에이전트 본문
 ```
+
+## 함께 제공: project-roadmap 에이전트
+프로젝트 주제를 주면 기획부터 발표까지의 흐름을 HTML 한 장으로 정리합니다. 크롬에서 열고 인쇄 → PDF로 저장할 수 있습니다.
+
+담는 내용: 개요 / 주제 선정 이유 / 기술 스택과 한계 / 주차별 흐름(기획→요구사항→설계→구현→테스트→발표) / 역할 분담(인원 입력 시) / 발표 준비
+
+```
+/plugin marketplace add Youkjooyoung/claude-local-guide
+/plugin install project-roadmap@youkjooyoung-skills
+```
+사용 예시:
+- "인파 밀집 주제로 프로젝트 로드맵 만들어줘. 4명, YOLO + Streamlit"
+- "교통 주제로 기획부터 발표까지 정리해줘. 발표일 11월 27일"
 
 ## 라이선스
 MIT

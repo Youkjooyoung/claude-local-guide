@@ -1,6 +1,6 @@
 {
   "name": "youkjooyoung-skills",
-  "description": "Youkjooyoung의 Claude Code 스킬 모음",
+  "description": "Youkjooyoung의 Claude Code 스킬·에이전트 모음",
   "owner": {
     "name": "Youkjooyoung"
   },
@@ -9,6 +9,11 @@
       "name": "local-guide",
       "source": "./plugins/local-guide",
       "description": "프로젝트 폴더별 지역 지침서(CLAUDE.md)를 전역 지침과 겹치지 않게 만들고 정리한다"
+    },
+    {
+      "name": "project-roadmap",
+      "source": "./plugins/project-roadmap",
+      "description": "프로젝트 주제를 받아 기획부터 발표까지의 흐름을 HTML 한 장(크롬 열람·PDF 저장)으로 정리하는 에이전트"
     }
   ]
 }

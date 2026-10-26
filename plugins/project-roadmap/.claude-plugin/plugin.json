@@ -1,0 +1,9 @@
+{
+  "name": "project-roadmap",
+  "description": "프로젝트 주제를 받아 기획부터 발표까지의 흐름을 HTML 한 장(크롬 열람·PDF 저장)으로 정리하는 에이전트",
+  "version": "1.0.0",
+  "author": {
+    "name": "Youkjooyoung"
+  },
+  "license": "MIT"
+}
