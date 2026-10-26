@@ -6,14 +6,22 @@
  * 그래서 플러그인을 설치한 사람이 npm install 을 할 필요가 없다.
  *
  * 도구
- *   get_weather(city | latitude+longitude, day) — 오늘/내일 날씨(최고/최저 · 강수확률, 오늘은 현재 날씨 포함)
+ *   get_weather(place, days_ahead) — 오늘~6일 뒤 날씨(최고/최저 · 강수확률, 오늘은 현재 날씨 포함)
+ *
+ * 위치 검색은 Nominatim(OpenStreetMap)을 먼저 쓴다. Open-Meteo 지오코더(GeoNames)는
+ * 한국의 구·동·역을 모르기 때문이다. Nominatim 이 실패할 때만 Open-Meteo 지오코더로 넘어간다.
  */
 
 const readline = require('readline');
 
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const GEO_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
-const DEFAULT_CITY = 'Bucheon';
+// Nominatim 이용 정책: 앱을 알 수 있는 User-Agent 필수, 초당 1회 이하
+const USER_AGENT = 'weather-plugin/0.3.0 (+https://github.com/Youkjooyoung/claude-local-guide)';
+const DEFAULT_PLACE = '부천시';
+const MAX_DAYS_AHEAD = 6; // 7일 넘게는 예보 정확도가 크게 떨어진다
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
 // WMO 날씨 코드 → 한국어 (https://open-meteo.com/en/docs 의 표)
 const WMO = {
@@ -33,71 +41,89 @@ const TOOLS = [
   {
     name: 'get_weather',
     description:
-      "Today's or tomorrow's weather via Open-Meteo. For a city (시·군), pass `city` in English " +
-      'romanization (e.g. "Seoul", "Bucheon", "Jeju City"); Korean script is rejected. The geocoder ' +
-      'does NOT know districts, neighborhoods or stations (구·동·역) — pass latitude/longitude and ' +
-      'place_name instead. Always check the returned `region` matches the place the user meant. ' +
-      'Defaults to Bucheon, today.',
+      'Weather for today up to 6 days ahead via Open-Meteo. `place` accepts the name exactly as the ' +
+      'user said it, in Korean or English — city, district, neighborhood, station or landmark ' +
+      '(e.g. "부천", "남구로역", "강남역", "해운대"). Check the returned `region` matches the place ' +
+      'the user meant. Defaults to 부천시, today.',
     inputSchema: {
       type: 'object',
       properties: {
-        city: { type: 'string', description: 'City name in English, e.g. "Bucheon"' },
-        country_code: { type: 'string', description: 'ISO country code for city search. Default "KR"; pass e.g. "JP" for Tokyo' },
-        latitude: { type: 'number', description: 'Use with longitude for districts, neighborhoods or stations (구·동·역) the geocoder cannot find' },
-        longitude: { type: 'number' },
-        place_name: { type: 'string', description: 'Korean label when using coordinates, e.g. "구로구 남구로역"' },
-        day: { type: 'string', enum: ['today', 'tomorrow'], description: 'Default "today"' },
+        place: { type: 'string', description: 'Place name as the user said it, e.g. "남구로역"' },
+        country_code: { type: 'string', description: 'ISO country code. Default "KR"; pass e.g. "JP" for Tokyo' },
+        days_ahead: {
+          type: 'integer', minimum: 0, maximum: MAX_DAYS_AHEAD,
+          description: '0 = today (default), 1 = tomorrow, 2 = the day after, ... up to 6',
+        },
       },
     },
   },
 ];
 
-async function getJson(url) {
-  const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-  if (!res.ok) throw new Error(`Open-Meteo 응답 오류 HTTP ${res.status}`);
+async function getJson(url, headers = {}) {
+  const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+  if (!res.ok) throw new Error(`${new URL(url).host} 응답 오류 HTTP ${res.status}`);
   return res.json();
 }
 
-async function findPlace(city, countryCode) {
-  city = (city || DEFAULT_CITY).trim();
-  if (/[ㄱ-힝]/.test(city)) {
-    throw new Error(`도시명 "${city}" 은(는) 한글입니다. 영문 이름(예: Bucheon)으로 다시 호출하세요.`);
-  }
-  const cc = (countryCode || 'KR').toUpperCase();
-  const geo = await getJson(
-    `${GEO_URL}?count=10&language=ko&format=json&countryCode=${cc}&name=${encodeURIComponent(city)}`);
-  if (!geo.results || geo.results.length === 0) {
-    throw new Error(`"${city}" 을(를) ${cc} 에서 찾지 못했습니다. 구·동·역이면 latitude/longitude 로 다시 호출하세요.`);
-  }
-  // 동명 마을보다 큰 도시를 고른다 (예: Jeju → 제주시)
-  const place = geo.results.reduce((a, b) => ((b.population || 0) > (a.population || 0) ? b : a));
+let lastNominatimAt = 0;
+
+async function searchNominatim(name, cc) {
+  // 대기 전에 슬롯을 먼저 잡아야 동시 요청이 같은 시각에 몰리지 않는다
+  const slot = Math.max(Date.now(), lastNominatimAt + 1000);
+  lastNominatimAt = slot;
+  const wait = slot - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+
+  const q = new URLSearchParams({ q: name, format: 'jsonv2', limit: '1', countrycodes: cc.toLowerCase(), 'accept-language': 'ko' });
+  const [hit] = await getJson(`${NOMINATIM_URL}?${q}`, { 'User-Agent': USER_AGENT });
+  if (!hit) return null;
+  // display_name: "남구로역, 구로동로, 가리봉동, 구로2동, 구로구, 서울특별시, 08320, 대한민국"
+  const parts = hit.display_name.split(', ').filter((p) => !/^\d{5}$/.test(p));
   return {
-    name: place.name,
-    region: [place.admin1, place.admin2, place.country].filter(Boolean).join(', '),
-    latitude: place.latitude,
-    longitude: place.longitude,
+    name: parts[0],
+    region: parts.slice(1).join(', '),
+    latitude: Number(hit.lat),
+    longitude: Number(hit.lon),
   };
 }
 
-async function getWeather(args = {}) {
-  const day = args.day === 'tomorrow' ? 'tomorrow' : 'today';
-  const i = day === 'tomorrow' ? 1 : 0;
+async function searchOpenMeteo(name, cc) {
+  const geo = await getJson(
+    `${GEO_URL}?count=10&language=ko&format=json&countryCode=${cc}&name=${encodeURIComponent(name)}`);
+  if (!geo.results || geo.results.length === 0) return null;
+  // 동명 마을보다 큰 도시를 고른다 (예: Jeju → 제주시)
+  const p = geo.results.reduce((a, b) => ((b.population || 0) > (a.population || 0) ? b : a));
+  return {
+    name: p.name,
+    region: [p.admin1, p.admin2, p.country].filter(Boolean).join(', '),
+    latitude: p.latitude,
+    longitude: p.longitude,
+  };
+}
 
-  // 지오코더가 모르는 구·동·역은 좌표로 받는다
-  const place = (typeof args.latitude === 'number' && typeof args.longitude === 'number')
-    ? {
-      name: args.place_name || `${args.latitude}, ${args.longitude}`,
-      region: `좌표 직접 지정 (${args.latitude}, ${args.longitude})`,
-      latitude: args.latitude,
-      longitude: args.longitude,
-    }
-    : await findPlace(args.city, args.country_code);
+async function findPlace(name, countryCode) {
+  name = (name || DEFAULT_PLACE).trim();
+  const cc = (countryCode || 'KR').toUpperCase();
+  let place = null;
+  try {
+    place = await searchNominatim(name, cc);
+  } catch {
+    // Nominatim 장애·차단 시 Open-Meteo 지오코더로 넘어간다
+  }
+  if (!place) place = await searchOpenMeteo(name, cc);
+  if (!place) throw new Error(`"${name}" 을(를) ${cc} 에서 찾지 못했습니다. 더 큰 지역명(구·시)으로 다시 호출하세요.`);
+  return place;
+}
+
+async function getWeather(args = {}) {
+  const i = Number.isInteger(args.days_ahead) ? Math.min(Math.max(args.days_ahead, 0), MAX_DAYS_AHEAD) : 0;
+  const place = await findPlace(args.place, args.country_code);
 
   const q = new URLSearchParams({
     latitude: place.latitude,
     longitude: place.longitude,
     timezone: 'auto',
-    forecast_days: '2', // [0]=오늘, [1]=내일
+    forecast_days: String(i + 1), // daily[i] = i일 뒤
     current: 'temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code',
     daily: 'temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,weather_code',
   });
@@ -108,8 +134,9 @@ async function getWeather(args = {}) {
   const result = {
     place: place.name,
     region: place.region,
-    day,
+    days_ahead: i,
     date: d.time[i],
+    weekday: WEEKDAYS[new Date(`${d.time[i]}T00:00:00Z`).getUTCDay()],
     observed_at: c.time.replace('T', ' '),
     timezone: w.timezone,
     forecast: {
@@ -121,7 +148,7 @@ async function getWeather(args = {}) {
     },
     source: 'Open-Meteo (open-meteo.com)',
   };
-  if (day === 'today') {
+  if (i === 0) {
     result.now = {
       condition: WMO[c.weather_code] ?? `코드 ${c.weather_code}`,
       temp_c: c.temperature_2m,
@@ -148,7 +175,7 @@ async function handle(req) {
         result: {
           protocolVersion: params?.protocolVersion || '2025-06-18',
           capabilities: { tools: {} },
-          serverInfo: { name: 'weather', version: '0.2.0' },
+          serverInfo: { name: 'weather', version: '0.3.0' },
         },
       });
     case 'ping':

@@ -1,7 +1,7 @@
 {
   "name": "weather-plugin",
   "description": "오늘·내일 날씨를 옷차림 조언과 함께 요약해 터미널과 카카오톡 나챗방으로 보내는 날씨 브리핑 플러그인 (Open-Meteo OpenAPI · 직접 만든 MCP 서버)",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": {
     "name": "Youkjooyoung",
     "url": "https://github.com/Youkjooyoung"
